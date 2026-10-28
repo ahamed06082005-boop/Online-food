@@ -1,0 +1,210 @@
+// ---------- Menu Data ----------
+const menuItems = [
+  { id: 1, name: "Chicken Biryani", category: "Biryani", price: 180, icon: "🍛" },
+  { id: 2, name: "Mutton Biryani", category: "Biryani", price: 250, icon: "🍲" },
+  { id: 3, name: "Veg Biryani", category: "Biryani", price: 140, icon: "🥘" },
+  { id: 4, name: "South Indian Meals", category: "Meals", price: 120, icon: "🍱" },
+  { id: 5, name: "Curd Rice", category: "Meals", price: 70, icon: "🍚" },
+  { id: 6, name: "Parotta with Salna", category: "Meals", price: 90, icon: "🫓" },
+  { id: 7, name: "Samosa (2 pcs)", category: "Snacks", price: 40, icon: "🥟" },
+  { id: 8, name: "French Fries", category: "Snacks", price: 80, icon: "🍟" },
+  { id: 9, name: "Veg Burger", category: "Snacks", price: 100, icon: "🍔" },
+  { id: 10, name: "Cold Coffee", category: "Drinks", price: 90, icon: "🥤" },
+  { id: 11, name: "Fresh Lime Soda", category: "Drinks", price: 50, icon: "🍹" },
+  { id: 12, name: "Masala Tea", category: "Drinks", price: 25, icon: "🍵" }
+];
+
+const DELIVERY_FEE = 30;
+const FREE_DELIVERY_ABOVE = 500;
+
+// ---------- State ----------
+let cart = JSON.parse(localStorage.getItem("foodCart")) || [];
+let activeCategory = "All";
+let searchText = "";
+
+// ---------- DOM Elements ----------
+const menuGrid = document.getElementById("menu-grid");
+const noResult = document.getElementById("no-result");
+const searchInput = document.getElementById("search");
+const filterBox = document.getElementById("filters");
+const cartItemsBox = document.getElementById("cart-items");
+const cartCount = document.getElementById("cart-count");
+const subtotalEl = document.getElementById("subtotal");
+const deliveryEl = document.getElementById("delivery");
+const totalEl = document.getElementById("total");
+const checkoutSection = document.getElementById("checkout");
+const confirmSection = document.getElementById("confirmation");
+const checkoutForm = document.getElementById("checkout-form");
+const formError = document.getElementById("form-error");
+
+// ---------- Render Menu ----------
+function renderMenu() {
+  const filtered = menuItems.filter(item => {
+    const matchCategory = activeCategory === "All" || item.category === activeCategory;
+    const matchSearch = item.name.toLowerCase().includes(searchText.toLowerCase());
+    return matchCategory && matchSearch;
+  });
+
+  menuGrid.innerHTML = filtered.map(item => `
+    <div class="card">
+      <div class="card-img">${item.icon}</div>
+      <div class="card-body">
+        <h3>${item.name}</h3>
+        <span class="tag">${item.category}</span>
+        <div class="card-bottom">
+          <span class="price">Rs. ${item.price}</span>
+          <button class="add-btn" onclick="addToCart(${item.id})">Add</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+
+  noResult.classList.toggle("hidden", filtered.length > 0);
+}
+
+// ---------- Cart Functions ----------
+function saveCart() {
+  localStorage.setItem("foodCart", JSON.stringify(cart));
+}
+
+function addToCart(id) {
+  const existing = cart.find(c => c.id === id);
+  if (existing) {
+    existing.qty++;
+  } else {
+    const item = menuItems.find(m => m.id === id);
+    cart.push({ ...item, qty: 1 });
+  }
+  saveCart();
+  renderCart();
+}
+
+function changeQty(id, delta) {
+  const item = cart.find(c => c.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) cart = cart.filter(c => c.id !== id);
+  saveCart();
+  renderCart();
+}
+
+function removeItem(id) {
+  cart = cart.filter(c => c.id !== id);
+  saveCart();
+  renderCart();
+}
+
+function calculateTotals() {
+  const subtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
+  const delivery = subtotal === 0 || subtotal >= FREE_DELIVERY_ABOVE ? 0 : DELIVERY_FEE;
+  return { subtotal, delivery, total: subtotal + delivery };
+}
+
+function renderCart() {
+  if (cart.length === 0) {
+    cartItemsBox.innerHTML = '<p class="empty-cart">Your cart is empty. Add some tasty food!</p>';
+  } else {
+    cartItemsBox.innerHTML = cart.map(c => `
+      <div class="cart-row">
+        <span>${c.icon} ${c.name}</span>
+        <div class="qty-controls">
+          <button onclick="changeQty(${c.id}, -1)">-</button>
+          <span>${c.qty}</span>
+          <button onclick="changeQty(${c.id}, 1)">+</button>
+        </div>
+        <span>Rs. ${c.price * c.qty}</span>
+        <button class="remove-btn" onclick="removeItem(${c.id})">Remove</button>
+      </div>
+    `).join("");
+  }
+
+  const { subtotal, delivery, total } = calculateTotals();
+  subtotalEl.textContent = "Rs. " + subtotal;
+  deliveryEl.textContent = "Rs. " + delivery;
+  totalEl.textContent = "Rs. " + total;
+  cartCount.textContent = cart.reduce((sum, c) => sum + c.qty, 0);
+}
+
+// ---------- Events ----------
+searchInput.addEventListener("input", e => {
+  searchText = e.target.value;
+  renderMenu();
+});
+
+filterBox.addEventListener("click", e => {
+  if (!e.target.classList.contains("filter-btn")) return;
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
+  activeCategory = e.target.dataset.category;
+  renderMenu();
+});
+
+document.getElementById("cart-btn").addEventListener("click", () => {
+  document.getElementById("cart-section").scrollIntoView({ behavior: "smooth" });
+});
+
+document.getElementById("checkout-btn").addEventListener("click", () => {
+  if (cart.length === 0) {
+    alert("Your cart is empty. Please add items first.");
+    return;
+  }
+  checkoutSection.classList.remove("hidden");
+  checkoutSection.scrollIntoView({ behavior: "smooth" });
+});
+
+// ---------- Checkout Validation and Order ----------
+checkoutForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const name = document.getElementById("name").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const address = document.getElementById("address").value.trim();
+  const payment = document.getElementById("payment").value;
+
+  if (name.length < 3) {
+    formError.textContent = "Please enter a valid name (minimum 3 characters).";
+    return;
+  }
+  if (!/^[6-9]\d{9}$/.test(phone)) {
+    formError.textContent = "Please enter a valid 10-digit mobile number.";
+    return;
+  }
+  if (address.length < 10) {
+    formError.textContent = "Please enter a complete delivery address.";
+    return;
+  }
+  if (!payment) {
+    formError.textContent = "Please select a payment method.";
+    return;
+  }
+  formError.textContent = "";
+  placeOrder(name, payment);
+});
+
+function placeOrder(name, payment) {
+  const { total } = calculateTotals();
+  const orderId = "FH" + Math.floor(100000 + Math.random() * 900000);
+
+  document.getElementById("confirm-text").textContent =
+    `Thank you, ${name}! Your order ${orderId} will be delivered in about 30 minutes. Payment: ${payment}.`;
+
+  document.getElementById("confirm-summary").innerHTML =
+    cart.map(c => `<p>${c.icon} ${c.name} x ${c.qty} - Rs. ${c.price * c.qty}</p>`).join("") +
+    `<p><strong>Total Paid: Rs. ${total}</strong></p>`;
+
+  cart = [];
+  saveCart();
+  renderCart();
+  checkoutForm.reset();
+  checkoutSection.classList.add("hidden");
+  confirmSection.classList.remove("hidden");
+  confirmSection.scrollIntoView({ behavior: "smooth" });
+}
+
+document.getElementById("new-order").addEventListener("click", () => {
+  confirmSection.classList.add("hidden");
+  document.getElementById("menu").scrollIntoView({ behavior: "smooth" });
+});
+
+// ---------- Init ----------
+renderMenu();
+renderCart();
